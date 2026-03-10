@@ -2,10 +2,17 @@
 
 ## 🚀 5 分钟快速上手
 
-### 1. 安装依赖
+### 1. 一键部署
 
 ```bash
 cd openclaw-provider-manage
+./deploy.sh
+```
+
+一键部署脚本会自动完成所有安装步骤，无需手动 `npm install`。
+
+或者手动安装：
+```bash
 npm install
 ```
 
