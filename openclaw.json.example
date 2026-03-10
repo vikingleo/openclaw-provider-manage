@@ -1,68 +1,78 @@
 {
-  "ai": {
-    "activeVendor": "anthropic",
-    "vendors": {
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5"
+      },
+      "models": {
+        "anthropic/claude-sonnet-4-5": {
+          "alias": "claude-sonnet"
+        },
+        "openai/gpt-4.1": {
+          "alias": "gpt41"
+        }
+      }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
       "anthropic": {
-        "name": "Anthropic",
-        "enabled": true,
-        "apiEndpoint": "https://api.anthropic.com",
-        "apiKeyEnv": "ANTHROPIC_API_KEY",
-        "defaultModel": "claude-3-5-sonnet-20241022",
-        "models": {
-          "claude-3-5-sonnet-20241022": {
-            "name": "Claude 3.5 Sonnet",
+        "baseUrl": "https://api.anthropic.com",
+        "apiKey": "${ANTHROPIC_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "claude-sonnet-4-5",
+            "name": "Claude Sonnet 4.5",
             "contextWindow": 200000,
             "maxOutputTokens": 8192
           },
-          "claude-3-opus-20240229": {
-            "name": "Claude 3 Opus",
+          {
+            "id": "claude-opus-4-1",
+            "name": "Claude Opus 4.1",
             "contextWindow": 200000,
-            "maxOutputTokens": 4096
+            "maxOutputTokens": 8192
           }
-        }
+        ]
       },
       "openai": {
-        "name": "OpenAI",
-        "enabled": false,
-        "apiEndpoint": "https://api.openai.com/v1",
-        "apiKeyEnv": "OPENAI_API_KEY",
-        "defaultModel": "gpt-4",
-        "models": {
-          "gpt-4": {
-            "name": "GPT-4",
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "${OPENAI_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "gpt-4.1",
+            "name": "GPT-4.1",
             "contextWindow": 128000,
-            "maxOutputTokens": 4096
+            "maxOutputTokens": 16384
           },
-          "gpt-4-turbo": {
-            "name": "GPT-4 Turbo",
+          {
+            "id": "gpt-4o-mini",
+            "name": "GPT-4o Mini",
             "contextWindow": 128000,
-            "maxOutputTokens": 4096
-          },
-          "gpt-3.5-turbo": {
-            "name": "GPT-3.5 Turbo",
-            "contextWindow": 16385,
-            "maxOutputTokens": 4096
+            "maxOutputTokens": 16384
           }
-        }
+        ]
       },
       "deepseek": {
-        "name": "DeepSeek",
-        "enabled": false,
-        "apiEndpoint": "https://api.deepseek.com",
-        "apiKeyEnv": "DEEPSEEK_API_KEY",
-        "defaultModel": "deepseek-chat",
-        "models": {
-          "deepseek-chat": {
+        "baseUrl": "https://api.deepseek.com",
+        "apiKey": "${DEEPSEEK_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "deepseek-chat",
             "name": "DeepSeek Chat",
-            "contextWindow": 32768,
-            "maxOutputTokens": 4096
+            "contextWindow": 64000,
+            "maxOutputTokens": 8192
           },
-          "deepseek-coder": {
-            "name": "DeepSeek Coder",
-            "contextWindow": 16384,
-            "maxOutputTokens": 4096
+          {
+            "id": "deepseek-reasoner",
+            "name": "DeepSeek Reasoner",
+            "contextWindow": 64000,
+            "maxOutputTokens": 8192
           }
-        }
+        ]
       }
     }
   }
