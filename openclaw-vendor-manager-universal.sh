@@ -28,6 +28,7 @@ ADD_VENDOR=false
 ADD_MODEL=false
 LIST_ONLY=false
 CONFIG_PATH=""  # 实际的配置路径（如 .ai.vendors 或 .providers）
+CONFIG_PATH_ARRAY="[]"
 
 # 日志函数
 log_info() {
@@ -44,6 +45,10 @@ log_warn() {
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $*"
+}
+
+set_config_path_metadata() {
+    CONFIG_PATH_ARRAY=$(jq -Rn --arg p "$CONFIG_PATH" '$p | ltrimstr(".") | split(".")')
 }
 
 # 显示帮助
@@ -171,6 +176,7 @@ detect_config_structure() {
     for path in "${paths[@]}"; do
         if jq -e "$path" "$config_file" >/dev/null 2>&1; then
             CONFIG_PATH="$path"
+            set_config_path_metadata
             log_success "检测到配置路径: $CONFIG_PATH"
             return 0
         fi
@@ -213,6 +219,7 @@ detect_config_structure() {
 
     # 初始化配置路径
     init_config_path
+    set_config_path_metadata
 }
 
 # 初始化配置路径
@@ -245,6 +252,58 @@ init_config_path() {
 
     mv "$tmp_file" "$config_file"
     log_success "配置路径已初始化"
+}
+
+list_vendor_models() {
+    local config_file="$1"
+    local vendor="$2"
+
+    jq -r \
+        --argjson path "$CONFIG_PATH_ARRAY" \
+        --arg vendor "$vendor" '
+        (getpath($path + [$vendor, "models"]) // {}) as $models |
+        if ($models | type) == "array" then
+            $models[]? | (.id // .name // empty)
+        elif ($models | type) == "object" then
+            $models | keys[]
+        else
+            empty
+        end
+    ' "$config_file" 2>/dev/null || true
+}
+
+provider_has_model() {
+    local config_file="$1"
+    local vendor="$2"
+    local model="$3"
+
+    jq -e \
+        --argjson path "$CONFIG_PATH_ARRAY" \
+        --arg vendor "$vendor" \
+        --arg model "$model" '
+        (getpath($path + [$vendor, "models"]) // {}) as $models |
+        if ($models | type) == "array" then
+            any($models[]?; (.id // .name // empty) == $model)
+        elif ($models | type) == "object" then
+            $models | has($model)
+        else
+            false
+        end
+    ' "$config_file" >/dev/null 2>&1
+}
+
+get_primary_model_ref() {
+    local config_file="$1"
+
+    jq -r '
+        if (.agents.defaults.model | type) == "object" then
+            .agents.defaults.model.primary // ""
+        elif (.agents.defaults.model | type) == "string" then
+            .agents.defaults.model
+        else
+            ""
+        end
+    ' "$config_file" 2>/dev/null || echo ""
 }
 
 # 检查依赖
@@ -290,18 +349,29 @@ backup_config() {
     mkdir -p "$backup_dir"
     cp "$config_file" "$backup_file"
 
-    log_success "配置已备份到: $backup_file"
+    log_success "配置已备份到: $backup_file" >&2
     echo "$backup_file"
 }
 
 # 列出当前配置
 list_current_config() {
     local config_file="$OPENCLAW_DIR/openclaw.json"
+    local primary_model_ref=""
+    local active_vendor=""
+    local active_model=""
 
     log_info "当前 OpenClaw 配置:"
     echo ""
     log_info "配置路径: $CONFIG_PATH"
     echo ""
+
+    if [[ "$CONFIG_PATH" == ".models.providers" ]]; then
+        primary_model_ref=$(get_primary_model_ref "$config_file")
+        if [[ "$primary_model_ref" == */* ]]; then
+            active_vendor="${primary_model_ref%%/*}"
+            active_model="${primary_model_ref#*/}"
+        fi
+    fi
 
     # 读取供应商配置
     local vendors=$(jq -r "$CONFIG_PATH // {} | keys[]" "$config_file" 2>/dev/null || echo "")
@@ -315,18 +385,39 @@ list_current_config() {
 
     echo -e "${BLUE}已配置的供应商:${NC}"
     for vendor in $vendors; do
-        local enabled=$(jq -r "$CONFIG_PATH.\"$vendor\".enabled // false" "$config_file")
-        local models=$(jq -r "$CONFIG_PATH.\"$vendor\".models // {} | keys[]" "$config_file" 2>/dev/null || echo "")
-        local default_model=$(jq -r "$CONFIG_PATH.\"$vendor\".defaultModel // \"\"" "$config_file")
+        local models
+        models=$(list_vendor_models "$config_file" "$vendor")
 
-        if [[ "$enabled" == "true" ]]; then
-            echo -e "  ${GREEN}✓${NC} $vendor (已启用)"
+        if [[ "$CONFIG_PATH" == ".models.providers" ]]; then
+            if [[ "$vendor" == "$active_vendor" && -n "$active_model" ]]; then
+                echo -e "  ${GREEN}✓${NC} $vendor (当前默认供应商)"
+                echo -e "    当前主模型: ${BLUE}$active_model${NC}"
+            else
+                echo -e "  ${YELLOW}○${NC} $vendor"
+            fi
+
+            local base_url=$(jq -r --arg vendor "$vendor" --argjson path "$CONFIG_PATH_ARRAY" 'getpath($path + [$vendor, "baseUrl"]) // ""' "$config_file" 2>/dev/null || echo "")
+            local api_mode=$(jq -r --arg vendor "$vendor" --argjson path "$CONFIG_PATH_ARRAY" 'getpath($path + [$vendor, "api"]) // ""' "$config_file" 2>/dev/null || echo "")
+
+            if [[ -n "$base_url" && "$base_url" != "null" ]]; then
+                echo "    Base URL: $base_url"
+            fi
+            if [[ -n "$api_mode" && "$api_mode" != "null" ]]; then
+                echo "    API 协议: $api_mode"
+            fi
         else
-            echo -e "  ${YELLOW}○${NC} $vendor (已禁用)"
-        fi
+            local enabled=$(jq -r "$CONFIG_PATH.\"$vendor\".enabled // false" "$config_file")
+            local default_model=$(jq -r "$CONFIG_PATH.\"$vendor\".defaultModel // \"\"" "$config_file")
 
-        if [[ -n "$default_model" ]]; then
-            echo -e "    默认模型: ${BLUE}$default_model${NC}"
+            if [[ "$enabled" == "true" ]]; then
+                echo -e "  ${GREEN}✓${NC} $vendor (已启用)"
+            else
+                echo -e "  ${YELLOW}○${NC} $vendor (已禁用)"
+            fi
+
+            if [[ -n "$default_model" ]]; then
+                echo -e "    默认模型: ${BLUE}$default_model${NC}"
+            fi
         fi
 
         if [[ -n "$models" ]]; then
@@ -339,10 +430,16 @@ list_current_config() {
     done
 
     # 显示当前活跃供应商（如果有）
-    local active_path="${CONFIG_PATH%.*}.activeVendor"
-    local active_vendor=$(jq -r "$active_path // \"\"" "$config_file" 2>/dev/null || echo "")
-    if [[ -n "$active_vendor" && "$active_vendor" != "null" ]]; then
-        echo -e "${GREEN}当前活跃供应商:${NC} $active_vendor"
+    if [[ "$CONFIG_PATH" == ".models.providers" ]]; then
+        if [[ -n "$primary_model_ref" ]]; then
+            echo -e "${GREEN}当前主模型:${NC} $primary_model_ref"
+        fi
+    else
+        local active_path="${CONFIG_PATH%.*}.activeVendor"
+        local active_vendor=$(jq -r "$active_path // \"\"" "$config_file" 2>/dev/null || echo "")
+        if [[ -n "$active_vendor" && "$active_vendor" != "null" ]]; then
+            echo -e "${GREEN}当前活跃供应商:${NC} $active_vendor"
+        fi
     fi
 }
 
@@ -368,30 +465,70 @@ switch_vendor() {
     local tmp_file=$(mktemp)
     local active_path="${CONFIG_PATH%.*}.activeVendor"
 
-    if [[ -n "$model" ]]; then
-        # 检查模型是否存在
-        local model_exists=$(jq -r "$CONFIG_PATH.\"$vendor\".models.\"$model\" // null" "$config_file")
-        if [[ "$model_exists" == "null" ]]; then
-            log_error "模型 '$model' 在供应商 '$vendor' 中不存在"
-            log_info "可用的模型:"
-            jq -r "$CONFIG_PATH.\"$vendor\".models // {} | keys[]" "$config_file" | sed 's/^/  - /'
-            exit 1
+    if [[ "$CONFIG_PATH" == ".models.providers" ]]; then
+        local target_model="$model"
+
+        if [[ -n "$target_model" ]]; then
+            if ! provider_has_model "$config_file" "$vendor" "$target_model"; then
+                log_error "模型 '$target_model' 在供应商 '$vendor' 中不存在"
+                log_info "可用的模型:"
+                list_vendor_models "$config_file" "$vendor" | sed 's/^/  - /'
+                exit 1
+            fi
+        else
+            target_model=$(list_vendor_models "$config_file" "$vendor" | head -n 1)
+            if [[ -z "$target_model" ]]; then
+                log_error "供应商 '$vendor' 没有可用模型，无法切换"
+                exit 1
+            fi
         fi
 
-        # 切换到指定供应商和模型
-        jq "$active_path = \"$vendor\" | $CONFIG_PATH.\"$vendor\".defaultModel = \"$model\" | $CONFIG_PATH.\"$vendor\".enabled = true" "$config_file" > "$tmp_file"
-        log_success "已切换到供应商 '$vendor' 的模型 '$model'"
+        local model_ref="$vendor/$target_model"
+        jq \
+            --arg model_ref "$model_ref" '
+            .agents = (.agents // {}) |
+            .agents.defaults = (.agents.defaults // {}) |
+            .agents.defaults.model = (
+                if (.agents.defaults.model | type) == "object" then
+                    (.agents.defaults.model + {primary: $model_ref})
+                else
+                    {primary: $model_ref}
+                end
+            ) |
+            if (.agents.defaults.models | type) == "object" then
+                .agents.defaults.models[$model_ref] = (.agents.defaults.models[$model_ref] // {})
+            else
+                .
+            end
+        ' "$config_file" > "$tmp_file"
+
+        mv "$tmp_file" "$config_file"
+        log_success "已切换到主模型 '$model_ref'"
     else
-        # 只切换供应商，使用其默认模型
-        jq "$active_path = \"$vendor\" | $CONFIG_PATH.\"$vendor\".enabled = true" "$config_file" > "$tmp_file"
-        local default_model=$(jq -r "$CONFIG_PATH.\"$vendor\".defaultModel // \"\"" "$config_file")
-        log_success "已切换到供应商 '$vendor'"
-        if [[ -n "$default_model" && "$default_model" != "null" ]]; then
-            log_info "使用默认模型: $default_model"
+        if [[ -n "$model" ]]; then
+            # 检查模型是否存在
+            if ! provider_has_model "$config_file" "$vendor" "$model"; then
+                log_error "模型 '$model' 在供应商 '$vendor' 中不存在"
+                log_info "可用的模型:"
+                list_vendor_models "$config_file" "$vendor" | sed 's/^/  - /'
+                exit 1
+            fi
+
+            # 切换到指定供应商和模型
+            jq "$active_path = \"$vendor\" | $CONFIG_PATH.\"$vendor\".defaultModel = \"$model\" | $CONFIG_PATH.\"$vendor\".enabled = true" "$config_file" > "$tmp_file"
+            mv "$tmp_file" "$config_file"
+            log_success "已切换到供应商 '$vendor' 的模型 '$model'"
+        else
+            # 只切换供应商，使用其默认模型
+            jq "$active_path = \"$vendor\" | $CONFIG_PATH.\"$vendor\".enabled = true" "$config_file" > "$tmp_file"
+            mv "$tmp_file" "$config_file"
+            local default_model=$(jq -r "$CONFIG_PATH.\"$vendor\".defaultModel // \"\"" "$config_file")
+            log_success "已切换到供应商 '$vendor'"
+            if [[ -n "$default_model" && "$default_model" != "null" ]]; then
+                log_info "使用默认模型: $default_model"
+            fi
         fi
     fi
-
-    mv "$tmp_file" "$config_file"
 
     log_info "如需回滚，请执行:"
     echo "  cp $backup_file $config_file"
@@ -419,35 +556,87 @@ add_vendor() {
         exit 1
     fi
 
-    read -p "供应商名称 (例如: Anthropic, OpenAI): " vendor_name
-    read -p "API 端点 (例如: https://api.anthropic.com): " api_endpoint
-    read -p "API Key 环境变量名 (例如: ANTHROPIC_API_KEY): " api_key_env
-    read -p "默认模型 ID (例如: claude-3-5-sonnet-20241022): " default_model
+    if [[ "$CONFIG_PATH" == ".models.providers" ]]; then
+        read -p "Base URL (例如: https://api.anthropic.com): " api_endpoint
+        read -p "API 协议 (默认: openai-completions): " api_mode
+        api_mode="${api_mode:-openai-completions}"
+        read -p "API Key 环境变量名 (例如: ANTHROPIC_API_KEY): " api_key_env
+        read -p "默认模型 ID (例如: claude-sonnet-4-5): " default_model
+        read -p "模型显示名称 (默认: $default_model): " model_name
+        model_name="${model_name:-$default_model}"
+        read -p "上下文窗口大小 (默认: 200000): " context_window
+        context_window="${context_window:-200000}"
+        read -p "最大输出 tokens (默认: 8192): " max_output
+        max_output="${max_output:-8192}"
+    else
+        read -p "供应商名称 (例如: Anthropic, OpenAI): " vendor_name
+        read -p "API 端点 (例如: https://api.anthropic.com): " api_endpoint
+        read -p "API Key 环境变量名 (例如: ANTHROPIC_API_KEY): " api_key_env
+        read -p "默认模型 ID (例如: claude-3-5-sonnet-20241022): " default_model
+    fi
 
     # 备份配置
     local backup_file=$(backup_config)
 
     # 添加供应商
     local tmp_file=$(mktemp)
-    jq "$CONFIG_PATH.\"$vendor_id\" = {
-        \"name\": \"$vendor_name\",
-        \"enabled\": true,
-        \"apiEndpoint\": \"$api_endpoint\",
-        \"apiKeyEnv\": \"$api_key_env\",
-        \"defaultModel\": \"$default_model\",
-        \"models\": {
-            \"$default_model\": {
-                \"name\": \"$default_model\",
-                \"contextWindow\": 200000,
-                \"maxOutputTokens\": 8192
+    if [[ "$CONFIG_PATH" == ".models.providers" ]]; then
+        local model_ref="$vendor_id/$default_model"
+        jq \
+            --arg vendor_id "$vendor_id" \
+            --arg api_endpoint "$api_endpoint" \
+            --arg api_key_env "$api_key_env" \
+            --arg api_mode "$api_mode" \
+            --arg default_model "$default_model" \
+            --arg model_name "$model_name" \
+            --argjson context_window "$context_window" \
+            --argjson max_output "$max_output" \
+            --arg model_ref "$model_ref" '
+            .models = (.models // {}) |
+            .models.mode = (.models.mode // "merge") |
+            .models.providers = (.models.providers // {}) |
+            .models.providers[$vendor_id] = {
+                baseUrl: $api_endpoint,
+                apiKey: (if ($api_key_env | length) > 0 then "${" + $api_key_env + "}" else "" end),
+                api: $api_mode,
+                models: [
+                    {
+                        id: $default_model,
+                        name: $model_name,
+                        contextWindow: $context_window,
+                        maxOutputTokens: $max_output
+                    }
+                ]
+            } |
+            if (.agents.defaults.models | type) == "object" then
+                .agents.defaults.models[$model_ref] = (.agents.defaults.models[$model_ref] // {alias: $model_name})
+            else
+                .
+            end
+        ' "$config_file" > "$tmp_file"
+    else
+        jq "$CONFIG_PATH.\"$vendor_id\" = {
+            \"name\": \"$vendor_name\",
+            \"enabled\": true,
+            \"apiEndpoint\": \"$api_endpoint\",
+            \"apiKeyEnv\": \"$api_key_env\",
+            \"defaultModel\": \"$default_model\",
+            \"models\": {
+                \"$default_model\": {
+                    \"name\": \"$default_model\",
+                    \"contextWindow\": 200000,
+                    \"maxOutputTokens\": 8192
+                }
             }
-        }
-    }" "$config_file" > "$tmp_file"
+        }" "$config_file" > "$tmp_file"
+    fi
 
     mv "$tmp_file" "$config_file"
 
     log_success "已添加供应商 '$vendor_id'"
-    log_warn "请确保设置环境变量: $api_key_env"
+    if [[ -n "$api_key_env" ]]; then
+        log_warn "请确保设置环境变量: $api_key_env"
+    fi
 
     # 询问是否立即切换
     read -p "是否立即切换到此供应商? (y/N): " switch_now
@@ -479,8 +668,7 @@ add_model() {
     fi
 
     # 检查模型是否已存在
-    local model_exists=$(jq -r "$CONFIG_PATH.\"$vendor\".models.\"$model_id\" // null" "$config_file")
-    if [[ "$model_exists" != "null" ]]; then
+    if provider_has_model "$config_file" "$vendor" "$model_id"; then
         log_error "模型 '$model_id' 已存在于供应商 '$vendor'"
         exit 1
     fi
@@ -499,11 +687,40 @@ add_model() {
 
     # 添加模型
     local tmp_file=$(mktemp)
-    jq "$CONFIG_PATH.\"$vendor\".models.\"$model_id\" = {
-        \"name\": \"$model_name\",
-        \"contextWindow\": $context_window,
-        \"maxOutputTokens\": $max_output
-    }" "$config_file" > "$tmp_file"
+    if [[ "$CONFIG_PATH" == ".models.providers" ]]; then
+        local model_ref="$vendor/$model_id"
+        jq \
+            --argjson path "$CONFIG_PATH_ARRAY" \
+            --arg vendor "$vendor" \
+            --arg model_id "$model_id" \
+            --arg model_name "$model_name" \
+            --argjson context_window "$context_window" \
+            --argjson max_output "$max_output" \
+            --arg model_ref "$model_ref" '
+            setpath(
+                $path + [$vendor, "models"];
+                ((getpath($path + [$vendor, "models"]) // []) + [
+                    {
+                        id: $model_id,
+                        name: $model_name,
+                        contextWindow: $context_window,
+                        maxOutputTokens: $max_output
+                    }
+                ])
+            ) |
+            if (.agents.defaults.models | type) == "object" then
+                .agents.defaults.models[$model_ref] = (.agents.defaults.models[$model_ref] // {alias: $model_name})
+            else
+                .
+            end
+        ' "$config_file" > "$tmp_file"
+    else
+        jq "$CONFIG_PATH.\"$vendor\".models.\"$model_id\" = {
+            \"name\": \"$model_name\",
+            \"contextWindow\": $context_window,
+            \"maxOutputTokens\": $max_output
+        }" "$config_file" > "$tmp_file"
+    fi
 
     mv "$tmp_file" "$config_file"
 
