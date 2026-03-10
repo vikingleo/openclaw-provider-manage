@@ -1,0 +1,33 @@
+{
+  "id": "openclaw-provider-manage",
+  "name": "OpenClaw Provider Manager",
+  "version": "1.0.0",
+  "description": "供应商模型一键配置管理扩展，支持 Telegram 卡片式操作",
+  "author": "OpenClaw Team",
+  "main": "index.js",
+  "commands": [
+    {
+      "command": "openclaw",
+      "description": "打开供应商管理卡片界面",
+      "handler": "showProviderCard"
+    },
+    {
+      "command": "openclaw-add",
+      "description": "添加新供应商",
+      "handler": "addProvider"
+    },
+    {
+      "command": "openclaw-list",
+      "description": "列出所有供应商",
+      "handler": "listProviders"
+    }
+  ],
+  "permissions": [
+    "config:read",
+    "config:write",
+    "telegram:send"
+  ],
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0"
+  }
+}

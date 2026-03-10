@@ -1,0 +1,26 @@
+{
+  "name": "openclaw-provider-manage",
+  "version": "1.0.0",
+  "description": "OpenClaw 供应商模型管理扩展",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "telegram": "node telegram-card.js",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "openclaw",
+    "provider",
+    "model",
+    "management",
+    "telegram"
+  ],
+  "author": "OpenClaw Team",
+  "license": "MIT",
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
