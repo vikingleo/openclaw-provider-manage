@@ -161,11 +161,11 @@ detect_config_structure() {
 
     # 尝试多种可能的路径
     local paths=(
+        ".models.providers"
         ".ai.vendors"
         ".providers"
         ".vendors"
         ".llm.providers"
-        ".models"
     )
 
     for path in "${paths[@]}"; do
@@ -180,24 +180,28 @@ detect_config_structure() {
     log_warn "未检测到标准的供应商配置路径"
     echo ""
     echo "请选择要使用的配置路径:"
-    echo "  1) .ai.vendors (推荐)"
-    echo "  2) .providers"
-    echo "  3) .vendors"
-    echo "  4) 自定义路径"
+    echo "  1) .models.providers (OpenClaw 标准)"
+    echo "  2) .ai.vendors"
+    echo "  3) .providers"
+    echo "  4) .vendors"
+    echo "  5) 自定义路径"
     echo ""
-    read -p "请选择 [1-4]: " choice
+    read -p "请选择 [1-5]: " choice
 
     case $choice in
         1)
-            CONFIG_PATH=".ai.vendors"
+            CONFIG_PATH=".models.providers"
             ;;
         2)
-            CONFIG_PATH=".providers"
+            CONFIG_PATH=".ai.vendors"
             ;;
         3)
-            CONFIG_PATH=".vendors"
+            CONFIG_PATH=".providers"
             ;;
         4)
+            CONFIG_PATH=".vendors"
+            ;;
+        5)
             read -p "请输入自定义路径 (如 .llm.providers): " custom_path
             CONFIG_PATH="$custom_path"
             ;;
@@ -225,7 +229,9 @@ init_config_path() {
     # 根据路径创建结构
     local tmp_file=$(mktemp)
 
-    if [[ "$CONFIG_PATH" == ".ai.vendors" ]]; then
+    if [[ "$CONFIG_PATH" == ".models.providers" ]]; then
+        jq '.models.mode = (.models.mode // "merge") | .models.providers = (.models.providers // {})' "$config_file" > "$tmp_file"
+    elif [[ "$CONFIG_PATH" == ".ai.vendors" ]]; then
         jq '.ai.vendors = (.ai.vendors // {})' "$config_file" > "$tmp_file"
     elif [[ "$CONFIG_PATH" == ".providers" ]]; then
         jq '.providers = (.providers // {})' "$config_file" > "$tmp_file"
