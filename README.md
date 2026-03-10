@@ -45,6 +45,9 @@ npm install
 推荐使用通用脚本：
 
 ```bash
+# 进入交互式菜单
+./openclaw-vendor-manager-universal.sh
+
 # 列出所有供应商
 ./openclaw-vendor-manager-universal.sh --list
 
@@ -62,6 +65,17 @@ npm install
 
 # 指定 OpenClaw 目录
 ./openclaw-vendor-manager-universal.sh --openclaw-dir /srv/openclaw --list
+```
+
+不带参数运行时会进入交互式菜单：
+
+```text
+请选择操作:
+  1) 列出当前配置
+  2) 切换供应商
+  3) 添加新供应商
+  4) 向供应商添加新模型
+  0) 退出
 ```
 
 ### 2. Node.js API

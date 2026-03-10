@@ -77,16 +77,16 @@
 
 ```bash
 # 列出供应商
-./openclaw-vendor-manager.sh --list
+./openclaw-vendor-manager-universal.sh --list
 
 # 切换供应商
-./openclaw-vendor-manager.sh --vendor anthropic --model claude-3-5-sonnet-20241022
+./openclaw-vendor-manager-universal.sh --vendor anthropic --model claude-sonnet-4-5
 
 # 添加供应商
-./openclaw-vendor-manager.sh --add-vendor
+./openclaw-vendor-manager-universal.sh --add-vendor
 
 # 添加模型
-./openclaw-vendor-manager.sh --add-model --vendor openai
+./openclaw-vendor-manager-universal.sh --add-model --vendor openai
 ```
 
 ### 2. Node.js API（新增）
@@ -104,11 +104,11 @@ manager.addProvider({
   name: 'Anthropic',
   apiEndpoint: 'https://api.anthropic.com',
   apiKeyEnv: 'ANTHROPIC_API_KEY',
-  defaultModel: 'claude-3-5-sonnet-20241022'
+  defaultModel: 'claude-sonnet-4-5'
 });
 
 // 切换供应商
-manager.switchProvider('anthropic', 'claude-3-5-sonnet-20241022');
+manager.switchProvider('anthropic', 'claude-sonnet-4-5');
 ```
 
 ### 3. Telegram 卡片管理（新增）
@@ -137,7 +137,7 @@ npm run telegram
 ./start.sh
 ```
 
-提供友好的菜单界面，包含所有功能。
+提供友好的菜单界面，包含所有功能。也可以直接运行 `./openclaw-vendor-manager-universal.sh` 进入交互式命令行菜单。
 
 ## 🔧 技术实现
 
@@ -215,7 +215,7 @@ npm test
 ./start.sh
 
 # 方式二：命令行
-./openclaw-vendor-manager.sh --list
+./openclaw-vendor-manager-universal.sh --list
 
 # 方式三：Telegram Bot
 export TELEGRAM_BOT_TOKEN="your_token"
@@ -227,7 +227,7 @@ npm run telegram
 ### 场景 1: OpenClaw 无法连接时快速切换供应商
 
 ```bash
-./openclaw-vendor-manager.sh --vendor openai --model gpt-4
+./openclaw-vendor-manager-universal.sh --vendor openai --model gpt-4.1
 # 配置已更新，重启 OpenClaw 即可
 ```
 
@@ -260,7 +260,7 @@ providers.forEach(p => manager.addProvider(p));
 🔧 OpenClaw 供应商管理
 
 ✅ 当前活跃: Anthropic
-📦 默认模型: claude-3-5-sonnet-20241022
+📦 默认模型: claude-sonnet-4-5
 
 📊 已配置供应商: 3 个
 🟢 已启用: 2 个
@@ -277,23 +277,23 @@ OpenClaw 供应商模型维护脚本
 
 已配置的供应商:
   ✓ anthropic (已启用)
-    默认模型: claude-3-5-sonnet-20241022
+    默认模型: claude-sonnet-4-5
     可用模型:
-      - claude-3-5-sonnet-20241022
+      - claude-sonnet-4-5
       - claude-3-opus-20240229
 
   ○ openai (已禁用)
-    默认模型: gpt-4
+    默认模型: gpt-4.1
     可用模型:
-      - gpt-4
-      - gpt-4-turbo
+      - gpt-4.1
+      - gpt-4.1-turbo
 
 当前活跃供应商: anthropic
 ```
 
 ## ✨ 亮点特性
 
-1. **原有脚本保留**: 完全保留 `openclaw-vendor-manager.sh` 的所有功能
+1. **推荐使用通用脚本**: 完全保留 `openclaw-vendor-manager.sh` 的所有功能
 2. **Telegram 卡片**: 创新的可视化管理方式
 3. **离线操作**: 即使服务不可用也能配置
 4. **自动备份**: 每次修改都有备份，安全可靠
@@ -325,7 +325,7 @@ OpenClaw 供应商模型维护脚本
 
 ### 获取帮助
 ```bash
-./openclaw-vendor-manager.sh --help
+./openclaw-vendor-manager-universal.sh --help
 ./verify.sh
 ./demo.sh
 ```
