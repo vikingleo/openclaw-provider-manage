@@ -33,7 +33,7 @@ class TelegramCardManager {
 
       if (activeProvider) {
         text += `✅ 当前活跃: *${activeProvider.name}*\n`;
-        text += `📦 默认模型: \`${activeProvider.defaultModel}\`\n\n`;
+        text += `📦 当前模型: \`${activeProvider.defaultModel}\`\n\n`;
       } else {
         text += '⚠️ 未设置活跃供应商\n\n';
       }
@@ -113,10 +113,11 @@ class TelegramCardManager {
       let text = `🔍 *供应商详情*\n\n`;
       text += `📛 名称: *${provider.name}*\n`;
       text += `🆔 ID: \`${provider.id}\`\n`;
-      text += `🌐 端点: \`${provider.apiEndpoint}\`\n`;
-      text += `🔑 API Key: \`${provider.apiKeyEnv}\`\n`;
-      text += `📦 默认模型: \`${provider.defaultModel || '未设置'}\`\n`;
-      text += `🔘 状态: ${provider.isActive ? '✅ 活跃' : (provider.enabled ? '🟢 已启用' : '⚪ 已禁用')}\n\n`;
+      text += `🌐 端点: \`${provider.apiEndpoint || '未设置'}\`\n`;
+      text += `🔑 API Key: \`${provider.apiKeyEnv || '未设置'}\`\n`;
+      text += `📦 当前模型: \`${provider.defaultModel || '未设置'}\`\n`;
+      text += `🔘 状态: ${provider.isActive ? '✅ 活跃' : (provider.enabled ? '🟢 已启用' : '⚪ 已禁用')}\n`;
+      text += `🧩 Schema: \`${provider.schema}\`\n\n`;
 
       text += `*可用模型 (${Object.keys(provider.models).length})*:\n`;
       Object.entries(provider.models).forEach(([id, model]) => {
@@ -189,7 +190,7 @@ class TelegramCardManager {
 
       await this.bot.sendMessage(chatId,
         `✅ 已切换到供应商: *${provider.name}*\n` +
-        `📦 默认模型: \`${provider.defaultModel}\`\n\n` +
+        `📦 当前模型: \`${provider.defaultModel}\`\n\n` +
         `💡 提示: 可能需要重启 OpenClaw 使配置生效`,
         { parse_mode: 'Markdown' }
       );

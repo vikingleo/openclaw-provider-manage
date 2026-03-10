@@ -28,3 +28,10 @@ Thumbs.db
 
 # OpenClaw backups (keep structure but ignore content)
 .openclaw/backups/
+
+
+# Local temp fixtures
+.tmp-*/
+
+# Backup snapshots created during local debugging
+**/.openclaw/backups/
