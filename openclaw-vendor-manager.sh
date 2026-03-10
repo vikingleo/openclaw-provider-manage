@@ -193,6 +193,40 @@ check_openclaw_dir() {
     log_success "找到 OpenClaw 配置: $config_file"
 }
 
+# 初始化配置文件
+init_config() {
+    local config_file="$OPENCLAW_DIR/openclaw.json"
+
+    log_info "初始化 OpenClaw 配置文件..."
+
+    # 备份现有配置（如果存在）
+    if [[ -f "$config_file" ]]; then
+        local backup_file="${config_file}.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "$config_file" "$backup_file"
+        log_info "已备份现有配置到: $backup_file"
+    fi
+
+    # 检查是否已有 ai 结构
+    local has_ai=$(jq -e '.ai' "$config_file" 2>/dev/null)
+    if [[ $? -eq 0 ]]; then
+        # 只添加 vendors 结构
+        local tmp_file=$(mktemp)
+        jq '.ai.vendors = {}' "$config_file" > "$tmp_file"
+        mv "$tmp_file" "$config_file"
+    else
+        # 创建完整的 ai 结构
+        local tmp_file=$(mktemp)
+        if [[ -f "$config_file" ]]; then
+            jq '. + {"ai": {"vendors": {}}}' "$config_file" > "$tmp_file"
+        else
+            echo '{"ai": {"vendors": {}}}' > "$tmp_file"
+        fi
+        mv "$tmp_file" "$config_file"
+    fi
+
+    log_success "配置文件已初始化"
+}
+
 # 备份配置文件
 backup_config() {
     local config_file="$OPENCLAW_DIR/openclaw.json"
@@ -214,11 +248,27 @@ list_current_config() {
     log_info "当前 OpenClaw 配置:"
     echo ""
 
+    # 检查配置文件是否有 ai.vendors 结构
+    local has_vendors=$(jq -e '.ai.vendors' "$config_file" 2>/dev/null)
+    if [[ $? -ne 0 ]]; then
+        log_warn "配置文件缺少 ai.vendors 结构"
+        echo ""
+        read -p "是否初始化配置文件？(y/N): " init_now
+        if [[ "$init_now" =~ ^[Yy]$ ]]; then
+            init_config
+            echo ""
+            log_info "配置已初始化，现在可以添加供应商了"
+        fi
+        return
+    fi
+
     # 读取 AI 供应商配置
     local vendors=$(jq -r '.ai.vendors // {} | keys[]' "$config_file" 2>/dev/null || echo "")
 
     if [[ -z "$vendors" ]]; then
         log_warn "未找到任何供应商配置"
+        echo ""
+        log_info "提示: 选择选项 3 添加新供应商"
         return
     fi
 
